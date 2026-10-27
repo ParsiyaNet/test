@@ -1,0 +1,1191 @@
+﻿<script language="javascript" type="text/javascript">
+function init()
+{
+	$.auto(function(){$.reload(); return false;}, 10000);
+	var days = 0;
+	var hours = 0;
+	var minutes = 0;
+	var seconds = 0;
+	var runTime;
+	var tbl, row, cell;
+	
+	if (INCLUDE_WAN_MODE)
+	{
+		var sysMode = $.act(ACT_GET, SYS_MODE, null, null, ["mode"]);
+	}
+	var device = $.act(ACT_GET, IGD, null, null, ["LANDeviceNumberOfEntries"]);
+	var devInfo = $.act(ACT_GET, IGD_DEV_INFO, null, null, ["softwareVersion", "hardwareVersion", "upTime"]);
+	
+	//WANDevice.{i}.WANDSLInterfaceConfig
+	var wanDslInfList =$.act(ACT_GL, WAN_DSL_INTF_CFG, null, null, ["status"]);
+	//WANDevice.{i}.WANCommonInterfaceConfig
+	var wanComInfList = $.act(ACT_GL, WAN_COMMON_INTF_CFG, null, null, ["WANAccessType"]);
+	//WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig
+	var wanDslLnkList = $.act(ACT_GL, WAN_DSL_LINK_CFG, null,null);
+	//VDSL BEGIN
+	var wanPtmLnkList = $.act(ACT_GL, WAN_PTM_LINK_CFG, null,null);
+	//VDSL END
+
+	var	wanIpConList = $.act(ACT_GL, WAN_IP_CONN, null, null);
+	var wanPppConList = $.act(ACT_GL, WAN_PPP_CONN, null, null);
+
+	if (INCLUDE_USB_3G_DONGLE)
+		var wan3glnkcfgList = $.act(ACT_GL, WAN_USB_3G_LINK_CFG, null, null, ["enable", "backupEnable"]);
+
+	var brList =$.act(ACT_GL, L2_BRIDGING_ENTRY, null, null, ["bridgeName"]);
+	if (INCLUDE_LAN_WLAN)
+	{
+		$.removeClass($.id("wlan_con"), "nd");
+		$.removeClass($.id("wlan_con5g"), "nd");
+		var wlanList = $.act(ACT_GL, LAN_WLAN, null, null, ["status", "SSID", "BSSID", "channel", "autoChannelEnable", "standard", "beaconType", "basicEncryptionModes",  "X_TPLINK_Bandwidth", "X_TPLINK_11nOnly", "possibleDataTransmitRates"]);
+if (!$.exe())
+		{
+			var wlanObj = wlanList[0];
+			var wdsObj=$.act(ACT_GET,LAN_WLAN_WDSBRIDGE,wlanObj.__stack,null,["BridgeEnable"]);
+		}
+		if (INCLUDE_LAN_WLAN_SCHEDULE)
+		{
+			var wlanScheList = $.act(ACT_GL, LAN_WLAN_TASK_SCHEDULE, null, null, ["enable", "isTimeSet", "isUsrCtrl"]);
+		}
+	}
+
+	if (INCLUDE_IPV6)
+	{
+		$.removeClass($.id("ip6_wan_status"), "nd");
+		$.removeClass($.id("ip6_lan_status"), "nd");
+		
+		var wanIp6ConList = $.act(ACT_GL, WAN_IP6_CONN, null, null);
+		var lanIp6List = $.act(ACT_GL, LAN_IP6_HOST_CFG, null, null);
+		var lanIp6Info = $.act(ACT_GL, LAN_IP6_INTF, null, null);
+	}
+	
+	if (!$.exe())
+	{
+		if (INCLUDE_WAN_MODE)
+		{
+
+			if (sysMode.mode == "ETH" || sysMode.mode == "USB_3G")
+			{
+				$.addClass($.id("d_dsl_status"), "nd");
+			}
+		}
+
+
+		var dslStk;
+		var ethStk;
+		var usb3gStk;
+
+		if (INCLUDE_IPV6)
+		{
+			$.each(lanIp6List, function()
+			{
+				if (this.__ifName == "br0")
+				{
+					if(this.RADVDEnable == 1)
+					{
+						$.h($.id("cfgtype"), "RADVD");
+					}
+					else
+					{
+						$.h($.id("cfgtype"), "DHCPv6");
+					}
+				}
+			});
+			$.each(lanIp6Info, function()
+			{
+				if (this.__ifName == "br0")
+				{
+					$.h($.id("lan6addr"), (this.IPv6InterfaceAddress) ? (this.IPv6InterfaceAddress) : "N/A");
+					$.h($.id("lan6prelen"), this.IPv6InterfaceAddressPrefixLength);
+					
+				}
+			});
+		
+		}
+		
+		$.each(wanComInfList, function()
+		{
+			if (this.WANAccessType == "DSL")
+				dslStk = this.__stack;
+			if (this.WANAccessType == "Ethernet")
+				ethStk = this.__stack;
+			if (this.WANAccessType == "USB_3G")
+				usb3gStk = this.__stack;
+		});
+
+
+		$.h($.id("sver"), devInfo.softwareVersion);
+		$.h($.id("hver"), devInfo.hardwareVersion);
+
+		days = Math.floor((devInfo.upTime)/(24*60*60), 10);
+		hours = Math.floor((devInfo.upTime)/(60*60), 10)%24;
+		hours = hours < 10 ? '0'+hours : hours; 
+		minutes = Math.floor(((devInfo.upTime)/60), 10)%60;
+		minutes = minutes < 10 ? '0'+minutes : minutes; 
+		seconds = (devInfo.upTime)%60;
+		seconds = seconds < 10 ? '0'+seconds : seconds; 
+		//runTime = days + " day(s)  " + hours + ":" + minutes + ":" + seconds;
+		runTime = days + " " + s_str.days + "  " + hours + ":" + minutes + ":" + seconds;
+		$.h($.id("UpTime"), runTime );
+		// DSL
+		wanDslCfg = $.act(ACT_GET, WAN_DSL_INTF_CFG, dslStk, null, ["status", "modulationType", "X_TPLINK_AdslModulationCfg",
+								"upstreamCurrRate", "downstreamCurrRate", "X_TPLINK_AnnexType",
+								"upstreamMaxRate", "downstreamMaxRate", 
+								"upstreamNoiseMargin", "downstreamNoiseMargin", 
+								"upstreamAttenuation", "downstreamAttenuation"]);
+		var wanDslInfSta = $.act(ACT_GET, DSL_SHOW_TIME, dslStk, null, ["ATUCCRCErrors", "CRCErrors"]);
+		if (!$.exe())
+		{
+			if ((wanDslCfg.status == "Initializing") || (wanDslCfg.status == "EstablishingLink"))
+			{
+				$.h($.id("dslstatus"), "<span class='T T_initing'>"+m_str.initing+"</span>");
+				$.h($.id("modulationType"), "<span class='T T_obtaining'>"+m_str.obtaining+"</span>");
+			}
+			else if (wanDslCfg.status == "Up")
+			{
+				$.h($.id("dslstatus"), "<span class='T T_connected'>"+m_str.connected+"</span>");
+				$.h($.id("modulationType"), wanDslCfg.modulationType);
+			}
+			else
+			{
+				$.h($.id("dslstatus"), "<span class='T T_disconnected'>"+m_str.disconnected+"</span>");
+				$.h($.id("modulationType"), wanDslCfg.X_TPLINK_AdslModulationCfg);
+			}
+			if (wanDslCfg.X_TPLINK_AnnexType)
+				$.h($.id("annexMode"), wanDslCfg.X_TPLINK_AnnexType);
+			if (wanDslCfg.upstreamCurrRate)
+				$.h($.id("upstreamCurrRate"), wanDslCfg.upstreamCurrRate);
+			if (wanDslCfg.downstreamCurrRate)
+				$.h($.id("downstreamCurrRate"), wanDslCfg.downstreamCurrRate);
+			if (wanDslCfg.upstreamMaxRate)
+				$.h($.id("upstreamMaxRate"), wanDslCfg.upstreamMaxRate);
+			if (wanDslCfg.downstreamMaxRate)
+				$.h($.id("downstreamMaxRate"), wanDslCfg.downstreamMaxRate);
+			if (wanDslCfg.upstreamNoiseMargin)
+				$.h($.id("upstreamNoiseMargin"), wanDslCfg.upstreamNoiseMargin/10);
+			if (wanDslCfg.downstreamNoiseMargin)
+				$.h($.id("downstreamNoiseMargin"), wanDslCfg.downstreamNoiseMargin/10);
+			if (wanDslCfg.upstreamAttenuation)
+				$.h($.id("upstreamAttenuation"), wanDslCfg.upstreamAttenuation/10);
+			if (wanDslCfg.downstreamAttenuation)
+				$.h($.id("downstreamAttenuation"), wanDslCfg.downstreamAttenuation/10);
+			$.h($.id("UCRC"), (wanDslInfSta.ATUCCRCErrors) ? wanDslInfSta.ATUCCRCErrors : 0);
+			$.h($.id("DCRC"), (wanDslInfSta.CRCErrors) ? wanDslInfSta.CRCErrors : 0);
+		}
+
+		var tbl = $.id("wan_table");
+
+
+		var wanDslInfStkList = "";
+		var wanDslInfStatusList = "";
+		for(var i = 0; i < wanDslInfList.length; i++)
+		{
+			var stkParts = (wanDslInfList[i].__stack).split(",");
+			wanDslInfStkList += stkParts[0] + ",";
+			wanDslInfStatusList += wanDslInfList[i].status + ",";
+		}
+		
+		var wanDslLnkTypeList = "";
+		var wanDslLnkStkList = "";
+		var wanDslLnkDesaddrList ="";
+		//vdsl begin
+		var wanPtmLnkStkList = "";
+		var wanPtmLnkUsedList = "";
+		var wanPtmLnkVidList = "";
+		//vdsl end
+		
+		for(var i = 0; i < wanDslLnkList.length; i++)
+		{
+			var stkParts = (wanDslLnkList[i].__stack).split(",");
+			wanDslLnkStkList += stkParts[0] + stkParts[1] + ",";
+			wanDslLnkTypeList += wanDslLnkList[i].linkType + ",";
+			wanDslLnkDesaddrList += wanDslLnkList[i].destinationAddress + ",";
+		}
+
+		//VDSL BEGIN
+		for(var i = 0; i < wanPtmLnkList.length; i++)
+		{
+			var stkParts = (wanPtmLnkList[i].__stack).split(",");
+			wanPtmLnkStkList += stkParts[0] + stkParts[1] + ",";
+			wanPtmLnkUsedList += wanPtmLnkList[i].X_TPLINK_Used + ",";
+			wanPtmLnkVidList += wanPtmLnkList[i].X_TPLINK_VID + ",";
+		}
+		//VDSL END
+
+		$.each(wanIpConList, function()
+		{
+			var tmpStk= $.stkPop(this.__stack, 2);
+			if (this.enable == 1)	
+			{
+				var row = tbl.insertRow(-1);
+
+				cell = row.insertCell(-1);	
+				cell.innerHTML = this.name;
+
+				var thisStkParts = (this.__stack).split(",");
+				var stk = thisStkParts[0] + thisStkParts[1];
+				var stkIndex = (wanDslLnkStkList).split(",");
+				
+				var stk1 = thisStkParts[0];	
+				var stkIndex1 = (wanDslInfStkList).split(",");
+				
+				var lnkTypeIndex = (wanDslLnkTypeList).split(",");
+				var desaddrIndex = (wanDslLnkDesaddrList).split(",");
+				var statusIndex = (wanDslInfStatusList).split(",");
+
+				//vdsl begin
+				var ptmUsedIndex = (wanPtmLnkUsedList).split(",");
+				var ptmVidIndex = (wanPtmLnkVidList).split(",");
+				//vdsl end
+
+				if (ethStk == tmpStk)
+				{
+					cell = row.insertCell(-1);
+					if (this.connectionType == "IP_Routed")
+					{
+						if (this.addressingType == "DHCP")
+						{
+							cell.innerHTML = "<span class='T T_dynip'>"+s_str.dynip+"</span>";
+							cell = row.insertCell(-1);
+							cell.innerHTML = "N/A";
+							cell = row.insertCell(-1);	
+							cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+							cell = row.insertCell(-1);	
+							cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+							//DNS
+							cell = row.insertCell(-1);	
+							if (this.DNSServers == "")
+								cell.innerHTML = "0.0.0.0 0.0.0.0";
+							else
+								cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+						}
+						else if (this.addressingType == "Static")
+						{
+							cell.innerHTML = "<span class='T T_staip'>"+s_str.staip+"</span>";
+							cell = row.insertCell(-1);
+							cell.innerHTML = "N/A";
+							cell = row.insertCell(-1);	
+							cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+							cell = row.insertCell(-1);	
+							cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+							//DNS
+							cell = row.insertCell(-1);	
+							if (this.DNSServers == "")
+								cell.innerHTML = "0.0.0.0 0.0.0.0";
+							else
+								cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+						}
+					}
+
+					cell = row.insertCell(-1);
+					if (this.connectionStatus == "Connected")
+					{
+						cell.innerHTML = "<span class='T T_connected'>"+m_str.connected+"</span>";
+					}
+					else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+					{
+						cell.innerHTML = "<span class='T T_disconnected'>"+m_str.disconnected+"</span>";
+					}
+					else
+					{
+						cell.innerHTML = "<span class='T T_connecting'>"+m_str.connecting+"</span>";
+					}
+				}
+
+				else if (dslStk == tmpStk)
+				{
+					for(var j = 0; j < stkIndex.length; j++)
+					{
+						if (stk == stkIndex[j])
+						{
+							cell = row.insertCell(-1);
+							if (lnkTypeIndex[j] == "IPoA")
+							{	
+								cell.innerHTML = "IPoA";
+								cell = row.insertCell(-1);
+								cell.innerHTML = desaddrIndex[j].split(":")[1];
+								cell = row.insertCell(-1);	
+								cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+								cell = row.insertCell(-1);	
+								cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+								//DNS
+								cell = row.insertCell(-1);	
+								if (this.DNSServers == "")
+									cell.innerHTML = "0.0.0.0 0.0.0.0";
+								else
+									cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+							}
+							if (lnkTypeIndex[j] == "EoA")	
+							{
+								if (this.connectionType == "IP_Bridged")
+								{
+									cell.innerHTML = "<span class='T T_bridge'>"+s_str.bridge+"</span>";
+									cell = row.insertCell(-1);
+									cell.innerHTML = desaddrIndex[j].split(":")[1];
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+								}
+								if (this.connectionType == "IP_Routed")
+								{
+									if (this.addressingType == "DHCP")
+									{
+										cell.innerHTML = "<span class='T T_dynip'>"+s_str.dynip+"</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = desaddrIndex[j].split(":")[1];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+										//DNS
+										cell = row.insertCell(-1);	
+										if (this.DNSServers == "")
+											cell.innerHTML = "0.0.0.0 0.0.0.0";
+										else
+											cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+									}
+									else if (this.addressingType == "Static")
+									{
+										cell.innerHTML = "<span class='T T_staip'>" + s_str.staip + "</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = desaddrIndex[j].split(":")[1];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+										//DNS
+										cell = row.insertCell(-1);	
+										if (this.DNSServers == "")
+											cell.innerHTML = "0.0.0.0 0.0.0.0";
+										else
+											cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+									}
+								}
+							}
+							//vdsl begin
+							if (lnkTypeIndex[j] == "Unconfigured")	
+							{
+								if (this.connectionType == "IP_Bridged")
+								{
+									cell.innerHTML = "Bridge";
+									cell = row.insertCell(-1);
+									cell.innerHTML = ptmVidIndex[j];
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+								}
+								if (this.connectionType == "IP_Routed")
+								{
+									if (this.addressingType == "DHCP")
+									{
+										cell.innerHTML = "<span class='T T_dynip'>" + s_str.dynip + "</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = ptmVidIndex[j];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = ((this.externalIPAddress != "" ? this.externalIPAddress : "0.0.0.0") + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+										//DNS
+										cell = row.insertCell(-1);	
+										if (this.DNSServers == "")
+											cell.innerHTML = "0.0.0.0 0.0.0.0";
+										else
+											cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+									}
+									else if (this.addressingType == "Static")
+									{
+										cell.innerHTML = "<span class='T T_staip'>" + s_str.staip + "</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = ptmVidIndex[j];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.externalIPAddress + " /" + (32 - ($.getmaskbit(this.subnetMask))));
+										cell = row.insertCell(-1);	
+										cell.innerHTML = (this.defaultGateway) ? this.defaultGateway : "0.0.0.0";
+										//DNS
+										cell = row.insertCell(-1);	
+										if (this.DNSServers == "")
+											cell.innerHTML = "0.0.0.0 0.0.0.0";
+										else
+											cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+									}
+								}
+							}
+							//vdsl end
+							break;
+						}
+					}
+
+					cell = row.insertCell(-1);			
+					for(var j = 0; j < stkIndex1.length; j++)
+					{
+						if (stk1 == stkIndex1[j])
+						{
+							if (statusIndex[j] == "Up")
+							{
+								if (this.connectionStatus == "Connected")
+								{
+									cell.innerHTML = "<span class='T T_connected'>" + m_str.connected + "</span>";
+								}
+								else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+								{
+									cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+								}
+								else
+								{
+									cell.innerHTML = "<span class='T T_connecting'>"+m_str.connecting+"</span>";
+								}
+							}
+							else if ((statusIndex[j] == "Initializing") || (statusIndex[j] == "EstablishingLink"))
+							{
+								cell.innerHTML = "<span class='T T_initing'>" + m_str.initing + "</span>";
+							}
+							// "NoSignal" "Error" "Disabled"
+							else 
+							{
+								cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+							}
+							break;
+						}
+					}
+				}
+			}
+		});
+			
+		var usb3gBackup = 0;
+		if (INCLUDE_USB_3G_DONGLE)
+		{
+			$.each(wan3glnkcfgList, function()
+			{
+				if (this.enable == 1)
+				{
+					usb3gBackup = this.backupEnable;
+				}
+			}, true);
+		}
+	
+		$.each(wanPppConList, function()
+		{
+			var tmpStk= $.stkPop(this.__stack, 2);
+			
+			if ((this.enable == 1 || (INCLUDE_USB_3G_DONGLE && tmpStk == usb3gStk && (sysMode.mode == "USB_3G" || usb3gBackup == 1))) && (!INCLUDE_IPV6 || INCLUDE_IPV6 && this.X_TPLINK_NCPType != "IPv6CP"))	
+			{
+				var row = tbl.insertRow(-1);
+
+				cell = row.insertCell(-1);	
+				cell.innerHTML = this.name;
+
+				var thisStkParts = (this.__stack).split(",");
+				
+				var stk = thisStkParts[0] + thisStkParts[1];
+				var stkIndex = (wanDslLnkStkList).split(",");
+				
+				var stk1 = thisStkParts[0];	
+				var stkIndex1 = (wanDslInfStkList).split(",");
+				
+				var lnkTypeIndex = (wanDslLnkTypeList).split(",");
+				var desaddrIndex = (wanDslLnkDesaddrList).split(",");
+				//var accessTypeIndex = (wanComAccessTypeList).split(",");
+				var statusIndex = (wanDslInfStatusList).split(",");
+				
+				//vdsl begin
+				var ptmUsedIndex = (wanPtmLnkUsedList).split(",");
+				var ptmVidIndex = (wanPtmLnkVidList).split(",");
+				//vdsl end				
+
+				cell = row.insertCell(-1);
+				if (this.transportType == "PPPoA")
+					cell.innerHTML = "PPPoA";
+				else if (this.transportType == "PPPoE")
+					cell.innerHTML = "PPPoE";
+				else if (this.transportType == "L2TP")
+					cell.innerHTML = "L2TP";
+				else if (this.transportType == "PPTP")
+					cell.innerHTML = "PPTP";
+				else if (this.transportType == "PPP3G")
+					cell.innerHTML = "PPP3G";
+				else
+					cell.innerHTML = "<span class='T T_unknown'>" + m_str.unknown + "</span>";
+				//VPI/VCI
+				cell = row.insertCell(-1);
+				if (ethStk == tmpStk)
+				{
+					cell.innerHTML = "N/A";
+				}
+				else if (usb3gStk == tmpStk)
+				{
+					cell.innerHTML = "N/A";
+				}
+				else if (dslStk == tmpStk)
+				{
+					for (var j = 0; j < desaddrIndex.length; j++)
+					{
+						if(stkIndex[j] == stk)
+						{
+							if (ptmUsedIndex[j] == 1)
+							{
+								cell.innerHTML = ptmVidIndex[j];
+							}
+							else 
+							{
+							var desaddrParts = desaddrIndex[j].split(":");
+							cell.innerHTML = desaddrParts[1];
+						}
+					}
+				}
+				}
+				//IP&Mask
+				cell = row.insertCell(-1);	
+				if ((this.externalIPAddress == "") || (this.externalIPAddress == "0.0.0.0"))
+					cell.innerHTML = "0.0.0.0 /0";
+				else
+					cell.innerHTML = (this.externalIPAddress + " /32");
+				//Gateway
+				cell = row.insertCell(-1);
+				cell.innerHTML =(this.remoteIPAddress ? this.remoteIPAddress : "0.0.0.0");
+				//DNS
+				cell = row.insertCell(-1);	
+	//			cell.width = "100px";
+				if (this.DNSServers == "")
+					cell.innerHTML = "0.0.0.0 0.0.0.0";
+				else
+					cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+
+				cell = row.insertCell(-1);			
+				if ((ethStk == tmpStk) || (usb3gStk == tmpStk))
+				{
+					if (this.connectionStatus == "Connected")
+					{
+						cell.innerHTML = "<span class='T T_connected'>"+m_str.connected+"</span>";
+					}
+					else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+					{
+						cell.innerHTML = "<span class='T T_disconnected'>"+m_str.disconnected+"</span>";
+					}
+					else 
+					{
+						cell.innerHTML = "<span class='T T_connecting'>"+m_str.connecting+"</span>";
+					}
+				}
+				else if (dslStk == tmpStk)
+				{
+					for(var j = 0; j < stkIndex1.length; j++)
+					{
+						if (stk1 == stkIndex1[j])
+						{
+							if (statusIndex[j] == "Up")
+							{
+								if (this.connectionStatus == "Connected")
+								{
+									cell.innerHTML = "<span class='T T_connected'>" + m_str.connected + "</span>";
+								}
+								else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+								{
+									cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+								}
+								else
+								{
+									cell.innerHTML = "<span class='T T_connecting'>" + m_str.connecting + "</span>";
+								}
+							}
+							else if ((statusIndex[j] == "Initializing") || (statusIndex[j] == "EstablishingLink"))
+							{
+									cell.innerHTML = "<span class='T T_initing'>" + m_str.initing + "</span>";
+							}
+							// "NoSignal" "Error" "Disabled"
+							else
+							{
+								cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+							}
+							break;
+						}
+					}
+				}
+			}
+		});
+
+		if (INCLUDE_IPV6)
+		{
+			var tbl = $.id("wan6_table");
+			$.each(wanIp6ConList, function()
+			{
+				var tmpStk= $.stkPop(this.__stack, 2);
+				if (this.enable == 1)	
+				{
+					var row = tbl.insertRow(-1);
+
+					cell = row.insertCell(-1);	
+					cell.innerHTML = this.name;
+							
+					var thisStkParts = (this.__stack).split(",");
+					var stk = thisStkParts[0] + thisStkParts[1];
+					var stkIndex = (wanDslLnkStkList).split(",");
+					
+					var stk1 = thisStkParts[0];	
+					var stkIndex1 = (wanDslInfStkList).split(",");
+					
+					var lnkTypeIndex = (wanDslLnkTypeList).split(",");
+					var desaddrIndex = (wanDslLnkDesaddrList).split(",");
+					var statusIndex = (wanDslInfStatusList).split(",");
+
+					//vdsl begin
+					var ptmUsedIndex = (wanPtmLnkUsedList).split(",");
+					var ptmVidIndex = (wanPtmLnkVidList).split(",");
+					//vdsl end
+
+					if (ethStk == tmpStk)
+					{
+						cell = row.insertCell(-1);
+						if (this.connectionType == "IP_Routed")
+						{
+							if (this.name.substr(0, 5) == "pppoe")
+							{
+								cell.innerHTML = "PPPoEv6";
+							}
+							else if (this.addressingType == "DHCP" ||this.addressingType == "AutoIp")
+							{
+								cell.innerHTML = "<span class='T T_dynip6'>"+s_str.dynip6+"</span>";
+							}
+							else if (this.addressingType == "Static")
+							{
+								cell.innerHTML = "<span class='T T_staip6'>"+s_str.staip6+"</span>";
+							}
+							
+							if (this.addressingType == "DHCP" || this.addressingType == "AutoIp")
+							{
+								cell = row.insertCell(-1);
+								cell.innerHTML = "N/A";
+								cell = row.insertCell(-1);	
+								cell.innerHTML = this.externalIPAddress + " /" + this.prefixLen;
+								cell = row.insertCell(-1);	
+								cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+								//DNS
+								cell = row.insertCell(-1);
+								if (this.DNSServers == "")
+									cell.innerHTML = ":: ::";
+								else
+									cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+							}
+							else if (this.addressingType == "Static")
+							{
+								cell = row.insertCell(-1);
+								cell.innerHTML = "N/A";
+								cell = row.insertCell(-1);	
+								cell.innerHTML = this.externalIPAddress + " /" + this.prefixLen;
+								cell = row.insertCell(-1);	
+								cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+								//DNS
+								cell = row.insertCell(-1);	
+								if (this.DNSServers == "")
+									cell.innerHTML = ":: ::";
+								else
+									cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+							}
+						}
+
+						cell = row.insertCell(-1);
+						if (this.connectionStatus == "Connected")
+						{
+							cell.innerHTML = "<span class='T T_connected'>"+m_str.connected+"</span>";
+						}
+						else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+						{
+							cell.innerHTML = "<span class='T T_disconnected'>"+m_str.disconnected+"</span>";
+						}
+						else
+						{
+							cell.innerHTML = "<span class='T T_connecting'>"+m_str.connecting+"</span>";
+						}
+					}
+
+					else if (dslStk == tmpStk)
+					{
+						for(var j = 0; j < stkIndex.length; j++)
+						{
+							if (stk == stkIndex[j])
+							{
+								cell = row.insertCell(-1);
+								if (lnkTypeIndex[j] == "IPoA")
+								{	
+									cell.innerHTML = "IPoA";
+									cell = row.insertCell(-1);
+									cell.innerHTML = desaddrIndex[j].split(":")[1];
+									cell = row.insertCell(-1);	
+									cell.innerHTML = this.externalIPAddress + " /" + this.prefixLen;
+									cell = row.insertCell(-1);	
+									cell.innerHTML = "N/A";
+									//DNS
+									cell = row.insertCell(-1);	
+									if (this.DNSServers == "")
+										cell.innerHTML = ":: ::";
+									else
+										cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+								}
+								if (lnkTypeIndex[j] == "EoA")	
+								{
+									if (this.connectionType == "IP_Bridged")
+									{
+										cell.innerHTML = "<span class='T T_bridge'>"+s_str.bridge+"</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = desaddrIndex[j].split(":")[1];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+									}
+									if (this.connectionType == "IP_Routed")
+									{
+										if (this.name.substr(0, 5) == "pppoe")
+										{
+											cell.innerHTML = "PPPoEv6";
+										}
+										else if (this.addressingType == "DHCP" ||this.addressingType == "AutoIp")
+										{
+											cell.innerHTML = "<span class='T T_dynip6'>"+s_str.dynip6+"</span>";
+										}
+										else if (this.addressingType == "Static")
+										{
+											cell.innerHTML = "<span class='T T_staip6'>"+s_str.staip6+"</span>";
+										}
+										
+										if (this.addressingType == "DHCP" ||this.addressingType == "AutoIp")
+										{
+											cell = row.insertCell(-1);
+											cell.innerHTML = desaddrIndex[j].split(":")[1];
+											cell = row.insertCell(-1);	
+											cell.innerHTML = this.externalIPAddress + " /" + this.prefixLen;
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+											//DNS
+											cell = row.insertCell(-1);	
+											if (this.DNSServers == "")
+												cell.innerHTML = ":: ::";
+											else
+												cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+										}
+										else if (this.addressingType == "Static")
+										{
+											cell = row.insertCell(-1);
+											cell.innerHTML = desaddrIndex[j].split(":")[1];
+											cell = row.insertCell(-1);	
+											cell.innerHTML = this.externalIPAddress + " /" + this.prefixLen;
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+											//DNS
+											cell = row.insertCell(-1);	
+											if (this.DNSServers == "")
+												cell.innerHTML = ":: ::";
+											else
+												cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+										}
+									}
+								}
+								//vdsl begin
+								if (lnkTypeIndex[j] == "Unconfigured")	
+								{
+									if (this.connectionType == "IP_Bridged")
+									{
+										cell.innerHTML = "<span class='T T_bridge'>"+s_str.bridge+"</span>";
+										cell = row.insertCell(-1);
+										cell.innerHTML = ptmVidIndex[j];
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+										cell = row.insertCell(-1);	
+										cell.innerHTML = "N/A";
+									}
+									if (this.connectionType == "IP_Routed")
+									{
+										if (this.name.substr(0, 5) == "pppoe")
+										{
+											cell.innerHTML = "PPPoEv6";
+										}
+										else if (this.addressingType == "DHCP" ||this.addressingType == "AutoIp")
+										{
+											cell.innerHTML = "<span class='T T_dynip6'>"+s_str.dynip6+"</span>";
+										}
+										else if (this.addressingType == "Static")
+										{
+											cell.innerHTML = "<span class='T T_staip6'>"+s_str.staip6+"</span>";
+										}
+										
+										if (this.addressingType == "DHCP" ||this.addressingType == "AutoIp")
+										{
+											cell = row.insertCell(-1);
+											cell.innerHTML = ptmVidIndex[j];
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.externalIPAddress != "" ? this.externalIPAddress : "0.0.0.0") + " /" + this.prefixLen;
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+											//DNS
+											cell = row.insertCell(-1);	
+											if (this.DNSServers == "")
+												cell.innerHTML = ":: ::";
+											else
+												cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+										}
+										else if (this.addressingType == "Static")
+										{
+											cell = row.insertCell(-1);
+											cell.innerHTML = ptmVidIndex[j];
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.externalIPAddress != "" ? this.externalIPAddress : "0.0.0.0") + " /" + this.prefixLen;
+											cell = row.insertCell(-1);	
+											cell.innerHTML = (this.defaultGateway != "::") ? this.defaultGateway : "Auto";
+											//DNS
+											cell = row.insertCell(-1);	
+											if (this.DNSServers == "")
+												cell.innerHTML = ":: ::";
+											else
+												cell.innerHTML = (this.DNSServers.split(",")[0] + " " +this.DNSServers.split(",")[1]);
+										}
+									}
+								}
+								//vdsl end
+								break;
+							}
+						}
+
+						cell = row.insertCell(-1);			
+						for(var j = 0; j < stkIndex1.length; j++)
+						{
+							if (stk1 == stkIndex1[j])
+							{
+								if (statusIndex[j] == "Up")
+								{
+									if (this.connectionStatus == "Connected")
+									{
+										cell.innerHTML = "<span class='T T_connected'>" + m_str.connected + "</span>";
+									}
+									else if ((this.connectionStatus == "Disconnected") || (this.connectionStatus == "Unconfigured"))
+									{
+										cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+									}
+									else
+									{
+										cell.innerHTML = "<span class='T T_connecting'>"+m_str.connecting+"</span>";
+									}
+								}
+								else if ((statusIndex[j] == "Initializing") || (statusIndex[j] == "EstablishingLink"))
+								{
+									cell.innerHTML = "<span class='T T_initing'>" + m_str.initing + "</span>";
+								}
+								// "NoSignal" "Error" "Disabled"
+								else 
+								{
+									cell.innerHTML = "<span class='T T_disconnected'>" + m_str.disconnected + "</span>";
+								}
+								break;
+							}
+						}
+					}
+				}
+			});
+		}
+
+		if (device.LANDeviceNumberOfEntries == 1)
+		{
+			$.addClass($.id("lan2"), "nd");
+			$.removeClass($.id("lan1"), "nd");
+
+			var lanIpCfg = $.act(ACT_GL, LAN_IP_INTF, null, null, ["IPInterfaceIPAddress", "IPInterfaceSubnetMask", "X_TPLINK_MACAddress"]);
+			var lanHostCfg = $.act(ACT_GL, LAN_HOST_CFG, null, null,["DHCPServerEnable"]);
+			if (!$.exe())
+			{
+				$.h($.id("lanmac"), lanIpCfg[0].X_TPLINK_MACAddress);
+				$.h($.id("lanip"), lanIpCfg[0]. IPInterfaceIPAddress);
+				$.h($.id("lanmask"), lanIpCfg[0]. IPInterfaceSubnetMask);
+				if (lanHostCfg[0].DHCPServerEnable == 1)
+					$.h($.id("dhcpen"), "<span class='T T_enabled'>" + m_str.enabled + "</span>");	
+				else
+					$.h($.id("dhcpen"), "<span class='T T_disabled'>" + m_str.disabled + "</span>");
+			}
+		}
+		else
+		{
+			$.addClass($.id("lan1"), "nd");
+			$.removeClass($.id("lan2"), "nd");
+			for (var i = 0; i < brList.length; i++)
+			{
+				var lanIpCfg = $.act(ACT_GS, LAN_IP_INTF, null, brList[i].__stack, ["IPInterfaceIPAddress", "IPInterfaceSubnetMask", "X_TPLINK_MACAddress"]);
+				var lanHostCfg = $.act(ACT_GET, LAN_HOST_CFG, brList[i].__stack, null,["DHCPServerEnable"]);
+				if (!$.exe())
+				{
+					tbl = $.id("lan_table");
+					row = tbl.insertRow(-1);
+					cell = row.insertCell(-1);
+					cell.innerHTML = brList[i].bridgeName;
+					cell = row.insertCell(-1);
+					cell.innerHTML = lanIpCfg[0].X_TPLINK_MACAddress;
+					cell = row.insertCell(-1);
+					cell.innerHTML = lanIpCfg[0].IPInterfaceIPAddress;
+					cell = row.insertCell(-1);
+					cell.innerHTML = lanIpCfg[0].IPInterfaceSubnetMask;
+					cell = row.insertCell(-1);
+					if (lanHostCfg.DHCPServerEnable == 1)
+						cell.innerHTML = "<span class='T T_enabled'>"+m_str.enabled+"</span>";	
+					else
+						cell.innerHTML = "<span class='T T_disabled'>"+m_str.disabled+"</span>";
+				}
+				
+			}
+			
+		}
+		
+
+
+
+		if (INCLUDE_LAN_WLAN)
+		{
+		//	$.addClass($.id("wlan2"), "nd");
+		//	$.removeClass($.id("wlan1"), "nd");
+			var j = 0;
+			$.each(wlanList,function()
+			{
+			if (wlanList[j].status == "Up")
+				$.h($.id("wlstat"+j), "<span class='T T_enabled'>"+m_str.enabled+"</span>");
+			else if (wlanList[j].status == "Error")
+				$.h($.id("wlstat"+j), "Error");
+			else if (wlanList[j].status == "Disabled")
+				$.h($.id("wlstat"+j), "<span class='T T_disabled'>"+m_str.disabled+"</span>");
+			$.h($.id("wlssid"+j), wlanList[j].SSID.replace(/\&/g, "&amp;").replace(/</g, "&lt;").replace(/ /g, "&nbsp;"));
+
+			if (1 == wlanList[j].autoChannelEnable)
+			{
+				$.h($.id("wlchl"+j), "<span class='T T_auto'>" + m_str.auto +"</span>(<span class='T T_channel'>"+s_str.channel+"</span> " + wlanList[j].channel + ")");
+			}
+			else
+			{	
+				$.h($.id("wlchl"+j), "<span class='T T_channel'>" + s_str.channel + "</span>" + wlanList[j].channel);
+			}
+
+			if (wlanList[j].X_TPLINK_Bandwidth == "Auto")
+				$.h($.id("wlbw"+j), "<span class='T T_auto'>"+m_str.auto+"</span>");
+			else
+				$.h($.id("wlbw"+j), wlanList[j].X_TPLINK_Bandwidth + "Hz");
+
+			if (wlanList[j].standard == "b")
+			{
+				$.h($.id("wlmod"+j), "<span class='T T_wl11b'>"+s_str.wl11b+"</span>");
+			}
+			if (wlanList[j].standard == "g")
+			{
+				$.h($.id("wlmod"+j), "<span class='T T_wl11bg'>"+s_str.wl11bg+"</span>");
+			}
+			if (wlanList[j].standard == "g-only")
+			{
+				$.h($.id("wlmod"+j), "<span class='T T_wl11g'>"+s_str.wl11g+"</span>");
+			}
+			if (wlanList[j].standard == "n")
+			{
+				if (1==wlanList[j].X_TPLINK_11nOnly)
+					$.h($.id("wlmod"+j), "<span class='T T_wl11n'>"+s_str.wl11n+"</span>");
+				else
+				{
+					if (j == 0)
+					$.h($.id("wlmod"+j), "<span class='T T_wl11bgn'>"+s_str.wl11bgn+"</span>");
+					else if (j == 1)
+						$.h($.id("wlmod"+j), "<span class='T T_wl11an'>"+s_str.wl11an+"</span>");
+				}
+			}
+			/* add for 5g 11a status display by wwj 121224 */
+			if (wlanList[j].standard == "a")
+			{
+				$.h($.id("wlmod"+j), "<span class='T T_wl11a'>"+s_str.wl11a+"</span>");
+			}
+
+			if ((wlanList[j].beaconType == "Basic") && (wlanList[j].basicEncryptionModes == "None"))
+				$.h($.id("wlenc"+j), "<span class='T T_none'>"+m_str.none+"</span>");
+			else if ((wlanList[j].beaconType == "Basic") && (wlanList[j].basicEncryptionModes == "WEPEncryption"))
+				$.h($.id("wlenc"+j), "WEP");
+			else if (wlanList[j].beaconType == "WPAand11i" || wlanList[j].beaconType == "11i" || wlanList[j].beaconType == "WPA") 
+				$.h($.id("wlenc"+j), "WPA-PSK/WPA2-PSK");
+
+			if (wlanList[j].BSSID)
+				$.h($.id("wlmac"+j), wlanList[j].BSSID);
+
+			var rateList = (wlanList[j].possibleDataTransmitRates).split(",");
+			var maxRate = 0;
+			for (var i = 0; i < rateList.length; i++)
+			{
+				if(parseInt(rateList[i],10) > maxRate)
+					maxRate = parseInt(rateList[i],10);
+			}
+			$.h($.id("wlrate"+j), maxRate+"Mbps");
+			$.h($.id("wlmac"+j), wlanList[j].BSSID);
+
+			if (wdsObj.bridgeEnable == "1" && j == 0)
+				$.h($.id("wlwds"+j), "<span class='T T_enabled'>"+m_str.enabled+"</span>");
+			else
+				$.h($.id("wlwds"+j), "<span class='T T_disabled'>"+m_str.disabled+"</span>");
+				j++;
+			});
+	//	}
+
+/*
+		else
+		{
+			$.addClass($.id("wlan1"), "nd");
+			$.removeClass($.id("wlan2"), "nd");
+			
+			tbl = $.id("wlan_table");
+			row = tbl.insertRow(-1);
+			cell = row.insertCell(-1);
+			cell.innerHTML = ;
+		}
+*/	
+		}
+	}
+
+}
+</script>
+<p class="et T" id="et">Basic Status</p>
+<p class="bl"></p>
+<div class="con1 L">
+<p class="st T" id="t_devinfo">Device Information</p>
+<div class="con2">
+<p class="L2"><b class="item T" id="t_swver">Firmware Version:</b><span id="sver"></span></p>
+<p class="L2"><b class="item T" id="t_hwver">Hardware Version:</b><span id="hver"></span></p>
+<p class="L2"><b class="item T" id="t_uptime">System Up Time:</b><span id="UpTime"></span></p>
+</div>
+</div>
+<div class="con1 L" id="d_dsl_status">
+<p class="bl"></p>
+<p class="st">DSL</p>
+<div class="con2">
+<p class="L2"><b class="item T" id="t_link">Line Status:</b><span id="dslstatus"></span></p>
+<p class="L2"><b class="item T T_intfType">DSL Modulation Type:</b><span id="modulationType"></span></p>
+<p class="L2"><b class="item T" id="t_annex">Annex Type:</b><span id="annexMode"></span></p>
+<p class="br"></p>
+<table class="tc bdr M" id="dslTbl" cellspacing="0" cellpadding="0">
+<tr><th width="160px">&nbsp;</th><th class="T" id="t_up">Upstream</th><th class="T" id="t_down">Downstream</th></tr>
+<tr><th><span class="T" id="t_currate">Current Rate</span> (Kbps)</th><td><span id="upstreamCurrRate">0</span></td><td><span id="downstreamCurrRate">0</span></td></tr>
+<tr><th><span class="T" id="t_maxrate">Max Rate</span> (Kbps)</th><td><span id="upstreamMaxRate">0</span></td><td><span id="downstreamMaxRate">0</span></td></tr>
+<tr><th><span class="T" id="t_snr">SNR Margin</span> (dB)</th><td><span id="upstreamNoiseMargin">0</span></td><td><span id="downstreamNoiseMargin">0</span></td></tr>
+<tr><th><span class="T" id="t_att">Line Attenuation</span> (dB)</th><td><span id="upstreamAttenuation">0</span></td><td><span id="downstreamAttenuation">0</span></td></tr>
+<tr><th><span class="T" id="t_errs">Errors</span> <span class="T" id="t_pkts">(Pkts)</span></th><td><span id="UCRC">0</span></td><td><span id="DCRC">0</span></td></tr>
+</table>
+</div>
+</div>
+<p class="bl"></p>
+<div class="con1 L">
+<p class="st">WAN</p>
+<div class="con2">
+
+<table class="tc bdr" width="750px" id="wan_table" cellspacing="0" cellpadding="0">
+<tr><th class="T" id="t_title" width="110px">Name</th><th class="T T_conntype" width="70px">Connection Type</th><th width="70px" id="dest"></th><th width="116px" class="T T_ipmask">IP/Mask</th><th width="108px" class="T T_gateway">Gateway</th><th >DNS</th><th class="T T_status" width="70px">Status</th></tr>
+</table>
+</div>
+</div>
+<!--IPv6 WAN Status-->
+<div class="con1 L nd" id="ip6_wan_status">
+	<p class="br"></p>
+	<p class="st T" id="t_ipv6wan" >IPv6 WAN</p>
+	<div class="con2">
+		<div class="scrollx" style="width: 750px;">
+			<table class="tc bdr" width="750px" id="wan6_table" cellspacing="0" cellpadding="0">
+			<tr><th class="T" id="t_ip6title" width="110px">Name</th><th class="T T_conntype" width="70px">Connection Type</th><th width="70px" id="dest6"></th><th class="T" id="t_ip6addrplen">IPv6 Address/Prefix Length</th><th class="T T_gateway">Gateway</th><th>DNSv6</th><th class="T T_status" width="70px">Status</th></tr>
+			</table>
+		</div>
+	</div>
+</div>
+<!--IPv6 WAN Status End-->
+<p class="bl"></p>
+<div class="con1 L">
+<p class="st">LAN</p>
+<div class="con2">
+<div id="lan1">
+<p class="L2"><b class="item T T_macaddr">MAC Address:</b><span id="lanmac"></span></p>
+<p class="L2"><b class="item T T_ipaddr">IP Address:</b><span id="lanip"></span></p>
+<p class="L2"><b class="item T T_netmask">Subnet Mask:</b><span id="lanmask"></span></p>
+<p class="L2"><b class="item">DHCP:</b><span id="dhcpen"></span></p>
+</div>
+<div id="lan2">
+<table class="tc bdr L" id="lan_table" cellspacing="0" cellpadding="0">
+<tr><th class="T T_group">Group</th><th class="T T_macaddr">MAC Address</th><th class="T T_ipaddr">IP Address</th><th class="T T_netmask">Subnet Mask</th><th>DHCP</th></tr>
+</table>
+</div>
+</div>
+</div>
+<!--IPv6 LAN Status-->
+<div class="con1 L nd" id="ip6_lan_status">
+	<p class="st T" id="t_ipv6lan">IPv6 LAN</p>
+	<div id="lan6">
+		<p class="L2"><b class="item T T_ip6addr">IPv6 Address:</b><span id="lan6addr"></span></p>
+		<p class="L2"><b class="item T T_plen">Prefix Length:</b><span id="lan6prelen"></span></p>
+		<p class="L2"><b class="item T" id="t_lan6cfgtype">Autoconfiguration Type:</b><span id="cfgtype"></span></p>
+	</div>
+</div>
+<!--IPv6 LAN Status End-->
+<p class="bl"></p>
+<div id="wlan_con" class="nd">
+<div class="con1 L">
+<p class="st T T_wl">Wireless 2.4GHz</p>
+<div class="con2">
+<div id="wlan1">
+<p class="L2"><b class="item T T_status">Status:</b><span id="wlstat0"></span></p>
+<p class="L2"><b class="item">SSID:</b><span id="wlssid0"></span></p>
+<p class="L2"><b class="item T T_channel">Channel:</b><span id="wlchl0"></span></p>
+<p class="L2"><b class="item T T_chnwidth">Channel Width:</b><span id="wlbw0"></span></p>
+<p class="L2"><b class="item T T_mode">Mode:</b><span id="wlmod0"></span></p>
+<p class="L2"><b class="item T T_encryption">Encryption:</b><span id="wlenc0"></span></p>
+<p class="L2"><b class="item T T_macaddr">MAC Address:</b><span id="wlmac0"></span></p>
+<p class="L2"><b class="item T T_maxtxrate">Max Tx Rate:</b><span id="wlrate0"></span></p>
+<p class="L2"><b class="item T" id="t_wlwds">WDS Status:</b><span id="wlwds0"></span></p>
+<p class="br"></p>
+</div>
+<div id="wlan2" class="nd">
+<table class="tc bdr L" id="wlan_table" cellspacing="0" cellpadding="0">
+<tr><td class="T" id="t_status3">Status</td><td>SSID</td><td class="T T_channel">Channel</td><td class="T T_mode">Mode</td><td class="T" id="t_tx2">Max Tx Rate</td><td class="T T_macaddr">MAC Address</td></tr>
+</table>
+</div>
+</div>
+</div>
+<p class="bl"></p>
+</div>
+<!--Wireless 2.4GHz Status End-->
+<div id="wlan_con5g" class="nd">
+<div class="con1 L">
+<p class="st T T_wl5g">Wireless 5GHz</p>
+<div class="con2">
+<div id="wlan1">
+<p class="L2"><b class="item T T_status">Status:</b><span id="wlstat1"></span></p>
+<p class="L2"><b class="item">SSID:</b><span id="wlssid1"></span></p>
+<p class="L2"><b class="item T T_channel">Channel:</b><span id="wlchl1"></span></p>
+<p class="L2"><b class="item T T_chnwidth">Channel Width:</b><span id="wlbw1"></span></p>
+<p class="L2"><b class="item T T_mode">Mode:</b><span id="wlmod1"></span></p>
+<p class="L2"><b class="item T T_encryption">Encryption:</b><span id="wlenc1"></span></p>
+<p class="L2"><b class="item T T_macaddr">MAC Address:</b><span id="wlmac1"></span></p>
+<p class="L2"><b class="item T T_maxtxrate">Max Tx Rate:</b><span id="wlrate1"></span></p>
+<p class="br"></p>
+</div>
+<div id="wlan2" class="nd">
+<table class="tc bdr L" id="wlan_table" cellspacing="0" cellpadding="0">
+<tr><td class="T" id="t_status3">Status</td><td>SSID</td><td class="T T_channel">Channel</td><td class="T T_mode">Mode</td><td class="T" id="t_tx2">Max Tx Rate</td><td class="T T_macaddr">MAC Address</td></tr>
+</table>
+</div>
+</div>
+</div>
+<p class="bl"></p>
+</div>
+<!--Wireless 5GHz Status End-->
+<div class="nd"><p class="center"><input class="T T_refresh" type="button" id="refresh" value="Refresh"/></p></div>
+<script language="javascript" type="text/javascript">
+if (INCLUDE_VDSLWAN) {
+	$.h($.id("dest"), s_str.destVDSL);
+	$.h($.id("dest6"), s_str.destVDSL);
+}
+else {
+	$.h($.id("dest"), s_str.destADSL);
+	$.h($.id("dest6"), s_str.destADSL);
+}
+init();
+</script>
